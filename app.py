@@ -2,66 +2,60 @@ import streamlit as st
 from PIL import Image
 import numpy as np
 import cv2
-from pyzbar.pyzbar import decode, ZBarSymbol
+import pytesseract
+import pandas as pd
 
-st.set_page_config(page_title="Barcode & QR Scanner", layout="centered")
-st.title("📷 Barcode/QR Code Scanner")
+st.set_page_config(page_title="Text Extractor", layout="centered")
+st.title("📷 Image Text Extractor (Serial & PIP No)")
 
 st.markdown("""
-Capture a **clear image** of a barcode or QR code using your webcam. This app will try everything it can to decode it—even if it’s tiny, tilted, or tricky!
+Take **two photos** containing text like serial numbers and PIP numbers.
+The app will extract the text and display it in a table format.
 """)
 
-img_file = st.camera_input("Step 1: Snap a barcode or QR code")
+# Capture the first image
+img1_file = st.camera_input("Step 1: Capture First Image (Serial No)")
 
-if img_file is not None:
-    # Convert to OpenCV grayscale image
-    img = Image.open(img_file)
-    img_np = np.array(img)
-    img_gray = cv2.cvtColor(img_np, cv2.COLOR_RGB2GRAY)
+# Capture the second image
+img2_file = st.camera_input("Step 2: Capture Second Image (PIP No)")
 
-    # Resize image to help with small codes
-    scale_percent = 250  # Increase resolution
-    width = int(img_gray.shape[1] * scale_percent / 100)
-    height = int(img_gray.shape[0] * scale_percent / 100)
-    img_resized = cv2.resize(img_gray, (width, height), interpolation=cv2.INTER_LINEAR)
+def extract_text(img_file):
+    if img_file is not None:
+        img = Image.open(img_file)
+        img_np = np.array(img)
+        img_gray = cv2.cvtColor(img_np, cv2.COLOR_RGB2GRAY)
 
-    # Enhance contrast using CLAHE
-    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
-    img_enhanced = clahe.apply(img_resized)
+        # Enhance image
+        img_resized = cv2.resize(img_gray, None, fx=2, fy=2, interpolation=cv2.INTER_LINEAR)
+        img_blur = cv2.medianBlur(img_resized, 3)
+        _, img_thresh = cv2.threshold(img_blur, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
 
-    # Apply adaptive thresholding
-    img_thresh = cv2.adaptiveThreshold(
-        img_enhanced, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
-        cv2.THRESH_BINARY, 11, 2
-    )
+        # OCR
+        custom_config = r'--oem 3 --psm 6'
+        text = pytesseract.image_to_string(img_thresh, config=custom_config)
+        return text.strip(), img
+    return "", None
 
-    found = False
+if img1_file and img2_file:
+    with st.spinner("🔍 Extracting text from images..."):
+        serial_text, img1 = extract_text(img1_file)
+        pip_text, img2 = extract_text(img2_file)
 
-    # Try rotating the image in 4 orientations
-    for angle in [0, 90, 180, 270]:
-        rotated = np.rot90(img_thresh, k=angle // 90)
-        decoded_objs = decode(rotated, symbols=[ZBarSymbol.QRCODE, ZBarSymbol.CODE128, ZBarSymbol.EAN13])
-        if decoded_objs:
-            st.success(f"✅ Detected {len(decoded_objs)} code(s):")
-            for obj in decoded_objs:
-                st.subheader(f"{obj.type} detected")
-                st.code(obj.data.decode('utf-8'))
-            found = True
-            break
+        # Format into table
+        data = {
+            "Serial No": [serial_text],
+            "PIP No": [pip_text]
+        }
+        df = pd.DataFrame(data)
 
-    # Fallback: OpenCV QR multi-detector
-    if not found:
-        qr_detector = cv2.QRCodeDetector()
-        retval, decoded_info, points, _ = qr_detector.detectAndDecodeMulti(img_thresh)
-        if retval:
-            st.success(f"✅ Detected {len(decoded_info)} QR code(s) with OpenCV:")
-            for i, data in enumerate(decoded_info):
-                if data:
-                    st.subheader(f"QR Code {i+1}")
-                    st.code(data)
-            found = True
+        st.success("✅ Text extraction complete!")
+        st.subheader("📋 Extracted Data:")
+        st.table(df)
 
-    if not found:
-        st.error("❌ No barcode or QR code could be detected. Try again with better lighting or zoom in a bit.")
+        with st.expander("📸 Show Captured Images"):
+            st.image(img1, caption="First Image (Serial No)", use_column_width=True)
+            st.image(img2, caption="Second Image (PIP No)", use_column_width=True)
 
-    st.image(img, caption="Captured Image")
+elif img1_file or img2_file:
+    st.info("📸 Please capture **both** images to proceed.")
+
