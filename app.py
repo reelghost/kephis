@@ -1,23 +1,26 @@
 import streamlit as st
 from PIL import Image
 import numpy as np
-import cv2
 import pytesseract
 import pandas as pd
+import cv2
+import base64
+from io import BytesIO
 
 st.set_page_config(page_title="Text Extractor", layout="centered")
 st.title("📷 Image Text Extractor (Serial & PIP No)")
 
 st.markdown("""
-Take **two photos** containing text like serial numbers and PIP numbers.
-The app will extract the text and display it in a table format.
+Take **two photos** containing text like serial numbers and PIP numbers.  
+Use your **rear camera** if available (mobile supported).
 """)
 
-# Capture the first image
-img1_file = st.camera_input("Step 1: Capture First Image (Serial No)")
+def capture_image(label):
+    uploaded = st.file_uploader(label, type=['jpg', 'jpeg', 'png'], accept_multiple_files=False, key=label)
+    return uploaded
 
-# Capture the second image
-img2_file = st.camera_input("Step 2: Capture Second Image (PIP No)")
+img1_file = capture_image("Step 1: Upload First Image (Serial No)")
+img2_file = capture_image("Step 2: Upload Second Image (PIP No)")
 
 def extract_text(img_file):
     if img_file is not None:
@@ -52,10 +55,9 @@ if img1_file and img2_file:
         st.subheader("📋 Extracted Data:")
         st.table(df)
 
-        with st.expander("📸 Show Captured Images"):
+        with st.expander("📸 Show Uploaded Images"):
             st.image(img1, caption="First Image (Serial No)", use_column_width=True)
             st.image(img2, caption="Second Image (PIP No)", use_column_width=True)
 
 elif img1_file or img2_file:
-    st.info("📸 Please capture **both** images to proceed.")
-
+    st.info("📸 Please upload **both** images to proceed.")
