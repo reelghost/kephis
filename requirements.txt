@@ -2,4 +2,3 @@ streamlit
 pyzbar
 Pillow
 opencv-contrib-python
-pyzbar
