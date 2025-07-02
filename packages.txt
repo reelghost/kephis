@@ -1,2 +1,2 @@
 libzbar0
-libdmtx
+libdmtx0a
